@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Inbox, User, Mail, Clock, Camera, CameraOff } from 'lucide-react';
+import { Inbox, User, Mail, Clock, Camera, CameraOff, Zap } from 'lucide-react';
 import { useScreenshotMode } from '../context/ScreenshotModeContext';
 import {
   getPlaceholderEmail,
@@ -22,6 +22,7 @@ interface Email {
   is_starred: boolean;
   has_attachments: boolean;
   folder?: string;
+  actions?: any;
 }
 
 interface InboxViewProps {
@@ -34,6 +35,19 @@ interface InboxViewProps {
 export function InboxView({ emails, profileContent, onEmailSelect, selectedEmailId }: InboxViewProps) {
   const [activeTab, setActiveTab] = useState<'inbox' | 'profile'>('inbox');
   const { isScreenshotMode, toggleScreenshotMode } = useScreenshotMode();
+
+  // Sort emails to show those with actions first
+  const sortedEmails = [...emails].sort((a, b) => {
+    const aHasActions = a.actions !== null && a.actions !== undefined;
+    const bHasActions = b.actions !== null && b.actions !== undefined;
+
+    // If action status differs, prioritize emails with actions
+    if (aHasActions && !bHasActions) return -1;
+    if (!aHasActions && bHasActions) return 1;
+
+    // If action status is the same, sort by date (most recent first)
+    return new Date(b.date_sent).getTime() - new Date(a.date_sent).getTime();
+  });
 
   // Format date to relative time
   const formatRelativeTime = (dateString: string) => {
@@ -107,7 +121,7 @@ export function InboxView({ emails, profileContent, onEmailSelect, selectedEmail
                 <p className="text-xs mt-2">Emails will appear here once synced</p>
               </div>
             ) : (
-              emails.map((email, index) => (
+              sortedEmails.map((email, index) => (
                 <div
                   key={email.id}
                   onClick={() => onEmailSelect(email)}
@@ -157,6 +171,12 @@ export function InboxView({ emails, profileContent, onEmailSelect, selectedEmail
                   )}
 
                   <div className="flex items-center gap-2 mt-2">
+                    {email.actions && (
+                      <div className="flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-blue-500" />
+                        <span className="text-xs text-blue-600 font-medium">Actions</span>
+                      </div>
+                    )}
                     {email.is_starred && (
                       <span className="text-yellow-500 text-xs">★</span>
                     )}

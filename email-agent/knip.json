@@ -1,0 +1,21 @@
+{
+  "entry": [
+    "client/index.tsx",
+    "agent/**/*.ts"
+  ],
+  "project": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.js"
+  ],
+  "ignore": [
+    "dist/**",
+    "node_modules/**",
+    "coverage/**"
+  ],
+  "ignoreDependencies": [
+    "sqlite3"
+  ],
+  "includeEntryExports": true,
+  "ignoreExportsUsedInFile": true
+}

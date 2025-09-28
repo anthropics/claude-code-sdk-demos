@@ -1,7 +1,7 @@
 {
   "name": "emailoauth",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server/server.ts",
   "scripts": {
     "dev": "bun run server/server.ts",
     "build": "bun build ./client/index.tsx --outdir=./dist",

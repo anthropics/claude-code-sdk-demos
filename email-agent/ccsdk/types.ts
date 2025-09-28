@@ -26,7 +26,21 @@ export interface RequestInboxMessage {
   type: "request_inbox";
 }
 
-export type IncomingMessage = ChatMessage | SubscribeMessage | UnsubscribeMessage | RequestInboxMessage;
+export interface GenerateActionsMessage {
+  type: "generate_actions";
+  emailId: string;
+  emailContent?: {
+    subject: string;
+    from_address: string;
+    from_name?: string;
+    to_address?: string;
+    date_sent: string;
+    body_text?: string;
+    body_html?: string;
+  };
+}
+
+export type IncomingMessage = ChatMessage | SubscribeMessage | UnsubscribeMessage | RequestInboxMessage | GenerateActionsMessage;
 
 // Re-export SDK types for convenience
 export type { SDKUserMessage, SDKMessage };

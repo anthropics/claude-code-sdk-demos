@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState<any | null>(null);
+  const [actionsLoading, setActionsLoading] = useState<{[key: string]: boolean}>({});
 
   // Single WebSocket connection for all components
   const { isConnected, sendMessage } = useWebSocket({
@@ -19,7 +20,24 @@ const App: React.FC = () => {
     onMessage: (message) => {
       switch (message.type) {
         case 'inbox_update':
-          setEmails(message.emails || []);
+          const newEmails = message.emails || [];
+          const emailsWithActions = newEmails.filter(email => email.actions !== null);
+          console.log('[FRONTEND] Received inbox update with', newEmails.length, 'emails,', emailsWithActions.length, 'with actions');
+
+          if (emailsWithActions.length > 0) {
+            console.log('[FRONTEND] First email with actions:', emailsWithActions[0].subject, emailsWithActions[0].actions);
+          }
+
+          setEmails(newEmails);
+
+          // Update selected email if it exists in the new email list
+          if (selectedEmail) {
+            const updatedSelectedEmail = newEmails.find(email => email.message_id === selectedEmail.message_id);
+            if (updatedSelectedEmail) {
+              console.log('[FRONTEND] Updating selected email, actions:', updatedSelectedEmail.actions !== null ? 'present' : 'absent');
+              setSelectedEmail(updatedSelectedEmail);
+            }
+          }
           break;
         case 'profile_update':
           setProfileContent(message.content || '');
@@ -63,6 +81,22 @@ const App: React.FC = () => {
           }
           setIsLoading(false);
           break;
+        case 'actions_generating':
+          console.log('Generating actions for email:', message.emailId);
+          setActionsLoading(prev => ({...prev, [message.emailId]: true}));
+          break;
+        case 'actions_generated':
+          console.log('Actions generated for email:', message.emailId);
+          console.log('Generated Actions JSON:', message.actions);
+          console.log('Raw response:', message.rawResponse);
+          console.log('Cost:', message.cost, 'Duration:', message.duration);
+          setActionsLoading(prev => ({...prev, [message.emailId]: false}));
+          // Actions will be included in the updated inbox broadcast, no need to manage state here
+          break;
+        case 'actions_error':
+          console.error('Actions generation error:', message.error);
+          setActionsLoading(prev => ({...prev, [message.emailId]: false}));
+          break;
         case 'error':
           console.error('Server error:', message.error);
           const errorMessage = {
@@ -90,6 +124,9 @@ const App: React.FC = () => {
         <EmailViewer
           email={selectedEmail}
           onClose={() => setSelectedEmail(null)}
+          sendMessage={sendMessage}
+          actions={selectedEmail?.actions || null}
+          isGeneratingActions={selectedEmail ? actionsLoading[selectedEmail.message_id] || false : false}
         />
         <div className="flex-1">
           <ChatInterface
