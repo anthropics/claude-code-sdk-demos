@@ -44,7 +44,8 @@ export const customServer = createSdkMcpServer({
 
           const results = await api.searchEmails({
             gmailQuery: args.gmailQuery,
-            limit: 30,
+            limit: 10,
+            headersOnly: false,  // Now using Node.js - full bodies should work
           });
 
           // Format results with full email content

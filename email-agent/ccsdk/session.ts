@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import Database from "better-sqlite3";
 import * as path from "path";
 import { MessageQueue } from "./message-queue";
 import type { WSClient, SDKUserMessage, SDKMessage } from "./types";

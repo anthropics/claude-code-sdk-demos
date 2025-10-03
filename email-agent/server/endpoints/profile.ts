@@ -1,3 +1,5 @@
+import * as fs from 'fs/promises';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -7,23 +9,25 @@ const corsHeaders = {
 export async function handleProfileEndpoint(req: Request): Promise<Response> {
   try {
     const profilePath = './agent/data/PROFILE.md';
-    const profileFile = Bun.file(profilePath);
 
-    if (await profileFile.exists()) {
-      const content = await profileFile.text();
+    try {
+      const content = await fs.readFile(profilePath, 'utf-8');
       return new Response(JSON.stringify({ content }), {
         headers: {
           'Content-Type': 'application/json',
           ...corsHeaders,
         },
       });
-    } else {
-      return new Response(JSON.stringify({ content: '' }), {
-        headers: {
-          'Content-Type': 'application/json',
-          ...corsHeaders,
-        },
-      });
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        return new Response(JSON.stringify({ content: '' }), {
+          headers: {
+            'Content-Type': 'application/json',
+            ...corsHeaders,
+          },
+        });
+      }
+      throw error;
     }
   } catch (error) {
     console.error('Error reading profile:', error);

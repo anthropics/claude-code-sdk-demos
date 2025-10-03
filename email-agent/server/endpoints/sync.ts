@@ -1,5 +1,5 @@
-import { Database } from "bun:sqlite";
-import { EmailSyncService } from "../../database/email-sync";
+import Database from "better-sqlite3";
+// import { EmailSyncService } from "../../database/email-sync"; // Disabled: uses old node-imap
 import { DATABASE_PATH } from "../../database/config";
 
 const corsHeaders = {
@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 const db = new Database(DATABASE_PATH);
-const syncService = new EmailSyncService(DATABASE_PATH);
+// const syncService = new EmailSyncService(DATABASE_PATH); // Disabled: uses old node-imap
 
 export async function handleSyncEndpoint(req: Request): Promise<Response> {
   try {
@@ -57,22 +57,23 @@ export async function handleSyncEndpoint(req: Request): Promise<Response> {
 
     console.log(`Starting sync for emails since ${syncSince.toISOString()}`);
 
-    syncService.syncEmails({
-      since: syncSince,
-      limit: 30,
-    }).then(syncResult => {
-      console.log(`Sync completed: ${syncResult.synced} synced, ${syncResult.skipped} skipped, ${syncResult.errors} errors`);
-      db.run(`
-        INSERT INTO sync_metadata (sync_time, emails_synced, emails_skipped, sync_type)
-        VALUES (?, ?, ?, ?)
-      `, [new Date().toISOString(), syncResult.synced, syncResult.skipped, 'auto']);
-    }).catch(error => {
-      console.error('Background sync failed:', error);
-    });
+    // Sync disabled: EmailSyncService uses old node-imap library
+    // syncService.syncEmails({
+    //   since: syncSince,
+    //   limit: 30,
+    // }).then(syncResult => {
+    //   console.log(`Sync completed: ${syncResult.synced} synced, ${syncResult.skipped} skipped, ${syncResult.errors} errors`);
+    //   db.run(`
+    //     INSERT INTO sync_metadata (sync_time, emails_synced, emails_skipped, sync_type)
+    //     VALUES (?, ?, ?, ?)
+    //   `, [new Date().toISOString(), syncResult.synced, syncResult.skipped, 'auto']);
+    // }).catch(error => {
+    //   console.error('Background sync failed:', error);
+    // });
 
     return new Response(JSON.stringify({
-      success: true,
-      message: 'Sync started in background',
+      success: false,
+      message: 'Sync feature temporarily disabled during ImapFlow migration',
       syncStarted: new Date().toISOString(),
     }), {
       headers: {

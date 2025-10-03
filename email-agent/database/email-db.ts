@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import Database from "better-sqlite3";
 import * as fs from "fs";
 import * as path from "path";
 import { DATABASE_PATH } from "./config";
@@ -75,7 +75,8 @@ export class EmailDatabase {
     this.db = new Database(dbPath);
     this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec("PRAGMA foreign_keys = ON");
-    this.initializeDatabase();
+    // Skip initialization - DatabaseManager handles schema creation
+    // this.initializeDatabase();
   }
 
   private initializeDatabase(): void {
