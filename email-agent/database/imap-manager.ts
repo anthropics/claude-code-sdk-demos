@@ -1,59 +1,55 @@
-const Imap = require("node-imap");
-const { simpleParser } = require("mailparser");
-import { EmailRecord, Attachment, SearchCriteria } from "./database-manager";
+import { ImapFlow } from 'imapflow';
+import { simpleParser } from 'mailparser';
+import { EmailRecord, Attachment, SearchCriteria } from './database-manager';
 
 interface ImapConfig {
-  user: string;
-  password: string;
-  host: string;
-  port: number;
-  tls: boolean;
-  tlsOptions?: { servername: string };
-  connTimeout?: number;
-  authTimeout?: number;
-  keepalive?: boolean;
+  user?: string;
+  password?: string;
+  host?: string;
+  port?: number;
+  tls?: boolean;
+  secure?: boolean;
 }
 
 export class ImapManager {
   private static instance: ImapManager;
-  private imapConfig: ImapConfig;
-  private imap: any;
-  private isConnected: boolean = false;
-  private connectionPromise: Promise<void> | null = null;
+  private client: ImapFlow | null = null;
+  private config: {
+    host: string;
+    port: number;
+    secure: boolean;
+    auth: {
+      user: string;
+      pass: string;
+    };
+    logger: boolean;
+  };
 
   private constructor(config?: Partial<ImapConfig>) {
-    // Build config from environment or provided config
     const EMAIL = config?.user || process.env.EMAIL_ADDRESS || process.env.EMAIL_USER;
     const PASSWORD = config?.password || process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
 
-    console.log('🔧 IMAP Configuration:');
+    console.log('🔧 ImapFlow Configuration:');
     console.log('   Email:', EMAIL ? `${EMAIL.substring(0, 3)}...@${EMAIL.split('@')[1]}` : 'NOT SET');
     console.log('   Password:', PASSWORD ? '***SET***' : 'NOT SET');
-    console.log('   Host:', config?.host || process.env.IMAP_HOST || "imap.gmail.com");
+    console.log('   Host:', config?.host || process.env.IMAP_HOST || 'imap.gmail.com');
 
     if (!EMAIL || !PASSWORD) {
       throw new Error(
-        "Email credentials not found! Please provide email configuration or set EMAIL_ADDRESS and EMAIL_APP_PASSWORD environment variables"
+        'Email credentials not found! Please provide email configuration or set EMAIL_ADDRESS and EMAIL_APP_PASSWORD environment variables'
       );
     }
 
-    this.imapConfig = {
-      user: EMAIL,
-      password: PASSWORD,
-      host: config?.host || process.env.IMAP_HOST || "imap.gmail.com",
-      port: config?.port || parseInt(process.env.IMAP_PORT || "993"),
-      tls: config?.tls !== undefined ? config.tls : true,
-      tlsOptions: config?.tlsOptions || { servername: config?.host || "imap.gmail.com" },
-      connTimeout: config?.connTimeout || 30000,  // Reduced from 120s to 30s
-      authTimeout: config?.authTimeout || 30000,  // Reduced from 60s to 30s
-      keepalive: config?.keepalive !== undefined ? config.keepalive : {
-        interval: 10000,  // Send keepalive every 10 seconds
-        idleInterval: 300000,  // Use IDLE for 5 minutes
-        forceNoop: true  // Force NOOP commands even when IDLE is available
+    this.config = {
+      host: config?.host || process.env.IMAP_HOST || 'imap.gmail.com',
+      port: config?.port || parseInt(process.env.IMAP_PORT || '993'),
+      secure: config?.secure !== undefined ? config.secure : true,
+      auth: {
+        user: EMAIL,
+        pass: PASSWORD,
       },
+      logger: false, // Set to console for debugging
     };
-
-    this.imap = new Imap(this.imapConfig);
   }
 
   public static getInstance(config?: Partial<ImapConfig>): ImapManager {
@@ -63,433 +59,276 @@ export class ImapManager {
     return ImapManager.instance;
   }
 
-  private async connect(): Promise<void> {
-    if (this.isConnected) return;
-
-    if (this.connectionPromise) {
-      return this.connectionPromise;
+  private async getClient(): Promise<ImapFlow> {
+    // Always create a fresh connection to avoid lock contention
+    if (this.client) {
+      console.log('🔄 Closing existing IMAP connection');
+      await this.client.logout().catch(() => {});
+      this.client = null;
     }
 
-    this.connectionPromise = new Promise((resolve, reject) => {
-      // Set a timeout for connection
-      const timeout = setTimeout(() => {
-        this.connectionPromise = null;
-        this.imap.end();
-        reject(new Error('IMAP connection timeout after 30 seconds'));
-      }, 30000);
+    console.log('🔌 Creating new ImapFlow client');
+    this.client = new ImapFlow(this.config);
 
-      const onReady = () => {
-        clearTimeout(timeout);
-        this.isConnected = true;
-        this.connectionPromise = null;
-        resolve();
-      };
+    this.client.on('error', (err) => {
+      console.error('❌ ImapFlow error:', err);
+    });
 
-      const onError = (err: Error) => {
-        console.error('❌ IMAP connection error:', err.message);
-        clearTimeout(timeout);
-        this.isConnected = false;
-        this.connectionPromise = null;
-        reject(err);
-      };
+    console.log('📡 Connecting to IMAP server...');
+    await this.client.connect();
+    console.log('✅ Connected to IMAP server');
 
-      const onEnd = () => {
-        clearTimeout(timeout);
-        this.isConnected = false;
-        this.connectionPromise = null;
-      };
+    return this.client;
+  }
 
-      this.imap.once("ready", onReady);
-      this.imap.once("error", onError);
-      this.imap.once("end", onEnd);
+  public async disconnect(): Promise<void> {
+    if (this.client) {
+      await this.client.logout();
+      this.client = null;
+    }
+  }
+
+  async searchEmails(
+    criteria: SearchCriteria,
+    headersOnly: boolean = false
+  ): Promise<Array<{ email: EmailRecord; attachments: Attachment[] }>> {
+    const client = await this.getClient();
+    const results: Array<{ email: EmailRecord; attachments: Attachment[] }> = [];
+
+    try {
+      // Determine which mailbox to search
+      const mailbox = criteria.folders && criteria.folders.length > 0
+        ? criteria.folders[0]
+        : 'INBOX';
+
+      console.log(`📂 Opening mailbox: ${mailbox}`);
+      const lock = await client.getMailboxLock(mailbox);
 
       try {
-        console.log('🔌 Attempting IMAP connection to', this.imapConfig.host);
-        this.imap.connect();
-      } catch (err) {
-        console.error('❌ IMAP connect error:', err);
-        clearTimeout(timeout);
-        this.connectionPromise = null;
-        reject(err);
+        // Build search query
+        const searchQuery: any = this.buildSearchQuery(criteria);
+        console.log('🔍 Search query:', JSON.stringify(searchQuery));
+
+        // Get list of UIDs that match the search
+        console.log('🔍 Searching for matching UIDs...');
+        const matchingUids = await client.search(searchQuery, { uid: true });
+        console.log(`📊 Found ${matchingUids.length} matching UIDs`);
+
+        // Sort by UID descending (higher UID = more recent) and apply limit
+        const sortedUids = matchingUids.sort((a, b) => b - a);
+        const uidsToFetch = criteria.limit
+          ? sortedUids.slice(0, criteria.limit)
+          : sortedUids;
+
+        console.log(`📥 Will fetch ${uidsToFetch.length} messages (most recent first)`);
+
+        // Fetch each message individually with fetchOne
+        for (const uid of uidsToFetch) {
+          const fetchOptions: any = {
+            envelope: true,
+            flags: true,
+          };
+
+          // For full body, fetch source (RFC822)
+          if (!headersOnly) {
+            fetchOptions.source = true;
+          }
+
+          console.log(`📥 Fetching UID ${uid}${!headersOnly ? ' with full source' : ''}...`);
+
+          const msg = await client.fetchOne(uid.toString(), fetchOptions, { uid: true });
+
+          console.log(`📩 Fetched UID ${uid}, source size: ${msg.source?.length || 0} bytes`);
+
+          try {
+            let parsed: any;
+
+            if (headersOnly) {
+              // For headers-only, construct minimal email from envelope
+              parsed = {
+                messageId: msg.envelope.messageId || `<uid-${uid}>`,
+                from: this.formatAddress(msg.envelope.from),
+                to: this.formatAddress(msg.envelope.to),
+                subject: msg.envelope.subject || '',
+                date: msg.envelope.date || new Date(),
+                text: '',
+                html: null,
+              };
+            } else {
+              // Parse the full RFC822 source with simpleParser
+              console.log(`📦 Parsing email source for UID ${uid}...`);
+
+              if (msg.source) {
+                parsed = await simpleParser(msg.source);
+                console.log(`✅ Parsed email UID ${uid}: text=${parsed.text?.length || 0}b, html=${parsed.html?.length || 0}b`);
+              } else {
+                console.log(`⚠️ No source returned for UID ${uid}`);
+                // Fallback to envelope
+                parsed = {
+                  messageId: msg.envelope.messageId || `<uid-${uid}>`,
+                  from: { text: this.formatAddress(msg.envelope.from) },
+                  to: { text: this.formatAddress(msg.envelope.to) },
+                  subject: msg.envelope.subject || '',
+                  date: msg.envelope.date || new Date(),
+                  text: '[No source returned]',
+                  html: null,
+                  attachments: [],
+                };
+              }
+            }
+
+            const emailRecord: EmailRecord = {
+              messageId: parsed.messageId || `<uid-${uid}>`,
+              threadId: msg.envelope.inReplyTo || undefined,
+              inReplyTo: msg.envelope.inReplyTo || undefined,
+              dateSent: parsed.date || msg.envelope.date || new Date(),
+              subject: parsed.subject || msg.envelope.subject || '',
+              fromAddress: parsed.from?.text || this.formatAddress(msg.envelope.from) || '',
+              fromName: parsed.from?.value?.[0]?.name || '',
+              toAddresses: parsed.to?.text || this.formatAddress(msg.envelope.to) || '',
+              ccAddresses: parsed.cc?.text || this.formatAddress(msg.envelope.cc) || '',
+              bccAddresses: parsed.bcc?.text || this.formatAddress(msg.envelope.bcc) || '',
+              replyTo: parsed.replyTo?.text || '',
+              bodyText: parsed.text || '',
+              bodyHtml: parsed.html || '',
+              snippet: (parsed.text || '').substring(0, 200),
+              isRead: msg.flags?.has('\\Seen') || false,
+              isStarred: msg.flags?.has('\\Flagged') || false,
+              isImportant: false,
+              isDraft: msg.flags?.has('\\Draft') || false,
+              isSent: false,
+              isTrash: false,
+              isSpam: false,
+              sizeBytes: msg.size || 0,
+              hasAttachments: parsed.attachments?.length > 0 || false,
+              attachmentCount: parsed.attachments?.length || 0,
+              folder: mailbox,
+              labels: [],
+            };
+
+            const attachments: Attachment[] = (parsed.attachments || []).map((att: any) => ({
+              filename: att.filename || 'unnamed',
+              contentType: att.contentType || '',
+              sizeBytes: att.size || 0,
+              contentId: att.contentId || '',
+              isInline: att.contentDisposition === 'inline',
+            }));
+
+            results.push({ email: emailRecord, attachments });
+          } catch (err) {
+            console.error(`❌ Error processing message ${uid}:`, err);
+          }
+        }
+      } finally {
+        lock.release();
       }
-    });
-
-    return this.connectionPromise;
-  }
-
-  private async ensureConnection(): Promise<void> {
-    if (!this.isConnected) {
-      console.log("Trying to connect to IMAP server...");
-      await this.connect();
-    } else {
-      console.log("Already connected to IMAP server");
+    } catch (err) {
+      console.error('❌ IMAP search error:', err);
+      throw err;
     }
+
+    return results;
   }
 
-  private openMailbox(mailbox: string): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.imap.openBox(mailbox, true, (err: Error | null, box: any) => {
-        if (err) reject(err);
-        else resolve(box);
-      });
-    });
-  }
-
-  // Convert SearchCriteria to IMAP search array
-  private buildImapSearchCriteria(criteria: SearchCriteria): any[] {
-    const searchCriteria: any[] = [];
-
-    // PRIORITY: If gmailQuery is provided, use Gmail's native search syntax (X-GM-RAW)
-    // This allows using Gmail's powerful search operators like OR, has:attachment, etc.
+  private buildSearchQuery(criteria: SearchCriteria): any {
+    // X-GM-RAW doesn't work properly with ImapFlow, parse Gmail query instead
     if (criteria.gmailQuery) {
-      console.log('📧 Using Gmail native search syntax:', criteria.gmailQuery);
-      searchCriteria.push(['X-GM-RAW', criteria.gmailQuery]);
-      return searchCriteria;  // Return early, ignore other criteria when using Gmail syntax
+      return this.parseGmailQuery(criteria.gmailQuery);
     }
 
-    if (criteria.query) {
-      searchCriteria.push(['OR',
-        ['SUBJECT', criteria.query],
-        ['BODY', criteria.query]
-      ]);
-    }
+    // Build standard IMAP search
+    const query: any = {};
 
     if (criteria.from) {
       const fromAddresses = Array.isArray(criteria.from) ? criteria.from : [criteria.from];
       if (fromAddresses.length === 1) {
-        searchCriteria.push(['FROM', fromAddresses[0]]);
+        query.from = fromAddresses[0];
       } else {
-        const orConditions = fromAddresses.map(addr => ['FROM', addr]);
-        searchCriteria.push(['OR', ...orConditions]);
+        // For multiple addresses, use OR
+        query.or = fromAddresses.map(addr => ({ from: addr }));
       }
     }
 
     if (criteria.to) {
       const toAddresses = Array.isArray(criteria.to) ? criteria.to : [criteria.to];
       if (toAddresses.length === 1) {
-        searchCriteria.push(['TO', toAddresses[0]]);
+        query.to = toAddresses[0];
       } else {
-        const orConditions = toAddresses.map(addr => ['TO', addr]);
-        searchCriteria.push(['OR', ...orConditions]);
+        query.or = query.or || [];
+        query.or.push(...toAddresses.map(addr => ({ to: addr })));
       }
     }
 
     if (criteria.subject) {
-      searchCriteria.push(['SUBJECT', criteria.subject]);
+      query.subject = criteria.subject;
     }
 
     if (criteria.dateRange) {
       if (criteria.dateRange.start) {
-        searchCriteria.push(['SINCE', criteria.dateRange.start]);
+        query.since = criteria.dateRange.start;
       }
       if (criteria.dateRange.end) {
-        searchCriteria.push(['BEFORE', criteria.dateRange.end]);
+        query.before = criteria.dateRange.end;
       }
-    }
-
-    if (criteria.hasAttachments) {
-      searchCriteria.push(['KEYWORD', 'has:attachment']);
     }
 
     if (criteria.isUnread) {
-      searchCriteria.push('UNSEEN');
-    } else if (criteria.isUnread === false) {
-      searchCriteria.push('SEEN');
+      query.unseen = true;
     }
 
-    if (criteria.minSize) {
-      searchCriteria.push(['LARGER', criteria.minSize]);
+    // If no criteria, return all
+    if (Object.keys(query).length === 0) {
+      return { all: true };
     }
 
-    if (criteria.maxSize) {
-      searchCriteria.push(['SMALLER', criteria.maxSize]);
+    return query;
+  }
+
+  private parseGmailQuery(gmailQuery: string): any {
+    const query: any = {};
+
+    // Extract from: field
+    const fromMatch = gmailQuery.match(/from:(\S+)/i);
+    if (fromMatch) {
+      query.from = fromMatch[1];
     }
 
-    // Default to ALL if no criteria specified
-    if (searchCriteria.length === 0) {
-      searchCriteria.push('ALL');
+    // Extract to: field
+    const toMatch = gmailQuery.match(/to:(\S+)/i);
+    if (toMatch) {
+      query.to = toMatch[1];
     }
 
-    return searchCriteria;
-  }
-
-  private searchMailbox(criteria: any[]): Promise<number[]> {
-    return new Promise((resolve, reject) => {
-      this.imap.search(criteria, (err: Error | null, results: number[]) => {
-        if (err) reject(err);
-        else resolve(results);
-      });
-    });
-  }
-
-  private fetchEmail(uid: number, headersOnly: boolean = false): Promise<any> {
-    return new Promise((resolve, reject) => {
-      const fetchOptions = headersOnly
-        ? { bodies: 'HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID IN-REPLY-TO REFERENCES)', struct: true }
-        : { bodies: "" };
-
-      const fetch = this.imap.fetch(uid, fetchOptions);
-      let emailData = "";
-      let resolved = false;
-      let attributes: any = null;
-
-      const safeResolve = (result: any) => {
-        if (!resolved) {
-          resolved = true;
-          resolve(result);
-        }
-      };
-
-      const safeReject = (error: Error) => {
-        if (!resolved) {
-          resolved = true;
-          reject(error);
-        }
-      };
-
-      fetch.on("message", (msg: any) => {
-        msg.on("body", (stream: any) => {
-          stream.on("data", (chunk: Buffer) => {
-            // Memory bounds checking (max 50MB per email)
-            if (emailData.length + chunk.length > 50 * 1024 * 1024) {
-              safeReject(new Error("Email too large (exceeds 50MB limit)"));
-              return;
-            }
-            emailData += chunk.toString("utf8");
-          });
-        });
-
-        msg.on("attributes", (attrs: any) => {
-          attributes = attrs;
-        });
-
-        msg.once("end", () => {
-          if (headersOnly && attributes) {
-            // For headers-only, combine the parsed headers with attributes
-            simpleParser(emailData, (err: Error | null, parsed: any) => {
-              if (err) safeReject(err);
-              else {
-                parsed.attributes = attributes;
-                safeResolve(parsed);
-              }
-            });
-          } else {
-            simpleParser(emailData, (err: Error | null, parsed: any) => {
-              if (err) safeReject(err);
-              else safeResolve(parsed);
-            });
-          }
-        });
-      });
-
-      fetch.once("error", (error: Error) => {
-        safeReject(error);
-      });
-
-      fetch.once("end", () => {
-        if (!emailData && !resolved) {
-          safeReject(new Error("No email data received"));
-        }
-      });
-    });
-  }
-
-  // Fetch emails in parallel with batching
-  private async fetchEmailsBatch(uids: number[], headersOnly: boolean = false, batchSize: number = 20): Promise<Map<number, any>> {
-    const results = new Map<number, any>();
-
-    // Use smaller batch size for headers-only (faster, less data)
-    const effectiveBatchSize = headersOnly ? 30 : batchSize;
-
-    for (let i = 0; i < uids.length; i += effectiveBatchSize) {
-      const batch = uids.slice(i, i + effectiveBatchSize);
-      const promises = batch.map(async (uid) => {
-        try {
-          const parsed = await this.fetchEmail(uid, headersOnly);
-          return { uid, parsed };
-        } catch (err) {
-          console.error(`Error fetching email ${uid}:`, (err as Error).message);
-          return { uid, parsed: null };
-        }
-      });
-
-      const batchResults = await Promise.all(promises);
-      for (const { uid, parsed } of batchResults) {
-        if (parsed) {
-          results.set(uid, parsed);
-        }
-      }
+    // Extract subject: field
+    const subjectMatch = gmailQuery.match(/subject:["']?([^"']+)["']?/i);
+    if (subjectMatch) {
+      query.subject = subjectMatch[1];
     }
 
-    return results;
-  }
-
-  // Convert parsed email to EmailRecord
-  private parseEmailToRecord(parsed: any, uid: number, folder: string): EmailRecord {
-    // Extract addresses
-    const toAddresses = parsed.to?.value?.map((addr: any) => addr.address).join(", ") || "";
-    const ccAddresses = parsed.cc?.value?.map((addr: any) => addr.address).join(", ") || "";
-    const bccAddresses = parsed.bcc?.value?.map((addr: any) => addr.address).join(", ") || "";
-
-    // Extract attachments
-    const attachments: Attachment[] = [];
-    if (parsed.attachments && parsed.attachments.length > 0) {
-      for (const att of parsed.attachments) {
-        attachments.push({
-          filename: att.filename || "unnamed",
-          contentType: att.contentType,
-          sizeBytes: att.size,
-          contentId: att.contentId,
-          isInline: att.contentDisposition === "inline",
-        });
-      }
+    // Extract newer_than: / after: fields
+    const newerMatch = gmailQuery.match(/(?:newer_than|after):(\d+)([dmy])/i);
+    if (newerMatch) {
+      const value = parseInt(newerMatch[1]);
+      const unit = newerMatch[2].toLowerCase();
+      const date = new Date();
+      if (unit === 'd') date.setDate(date.getDate() - value);
+      else if (unit === 'm') date.setMonth(date.getMonth() - value);
+      else if (unit === 'y') date.setFullYear(date.getFullYear() - value);
+      query.since = date;
     }
 
-    return {
-      messageId: parsed.messageId || `${uid}-${Date.now()}`,
-      threadId: parsed.threadId || parsed.inReplyTo,
-      inReplyTo: parsed.inReplyTo,
-      emailReferences: Array.isArray(parsed.references) ? parsed.references.join(" ") : parsed.references,
-      dateSent: parsed.date || new Date(),
-      subject: parsed.subject || "",
-      fromAddress: parsed.from?.value?.[0]?.address || "",
-      fromName: parsed.from?.value?.[0]?.name || "",
-      toAddresses,
-      ccAddresses,
-      bccAddresses,
-      replyTo: parsed.replyTo?.value?.[0]?.address,
-      bodyText: parsed.text || "",
-      bodyHtml: parsed.html || "",
-      snippet: (parsed.text || "").substring(0, 200),
-      isRead: false,
-      isStarred: false,
-      isImportant: false,
-      isDraft: false,
-      isSent: folder === "Sent" || folder === "[Gmail]/Sent Mail",
-      isTrash: folder === "Trash" || folder === "[Gmail]/Trash",
-      isSpam: folder === "Spam" || folder === "[Gmail]/Spam",
-      sizeBytes: 0,
-      hasAttachments: attachments.length > 0,
-      attachmentCount: attachments.length,
-      folder,
-      labels: [],
-      rawHeaders: JSON.stringify(parsed.headers),
-    };
-  }
-
-  // Search emails from IMAP with optimized parallel fetching
-  public async searchEmails(criteria: SearchCriteria, headersOnly: boolean = false): Promise<Array<{ email: EmailRecord; attachments: Attachment[] }>> {
-    await this.ensureConnection();
-
-    const folders = criteria.folders || [criteria.folder || "INBOX"];
-    const allEmails: Array<{ email: EmailRecord; attachments: Attachment[] }> = [];
-    const limit = criteria.limit || 30;
-
-    for (const folder of folders) {
-      try {
-        await this.openMailbox(folder);
-
-        const imapCriteria = this.buildImapSearchCriteria(criteria);
-        console.log(`🔍 Searching ${folder} with criteria:`, JSON.stringify(imapCriteria));
-
-        const uids = await this.searchMailbox(imapCriteria);
-        console.log(`📊 Found ${uids.length} messages in ${folder}`);
-
-        if (uids.length === 0) {
-          continue;
-        }
-
-        // Apply limit per folder (reverse to get newest first)
-        const limitedUids = uids.slice(-Math.min(limit, uids.length)).reverse();
-        console.log(`📥 Fetching ${limitedUids.length} messages in parallel...`);
-
-        // Fetch emails in parallel batches
-        const parsedEmails = await this.fetchEmailsBatch(limitedUids, headersOnly, 10);
-
-        // Process fetched emails
-        for (const uid of limitedUids) {
-          const parsed = parsedEmails.get(uid);
-          if (!parsed) continue;
-
-          try {
-            const email = this.parseEmailToRecord(parsed, uid, folder);
-
-            // Extract attachments (only if full body was fetched)
-            const attachments: Attachment[] = [];
-            if (!headersOnly && parsed.attachments && parsed.attachments.length > 0) {
-              for (const att of parsed.attachments) {
-                attachments.push({
-                  filename: att.filename || "unnamed",
-                  contentType: att.contentType,
-                  sizeBytes: att.size,
-                  contentId: att.contentId,
-                  isInline: att.contentDisposition === "inline",
-                });
-              }
-            }
-
-            allEmails.push({ email, attachments });
-
-            // Stop if we've reached the overall limit
-            if (allEmails.length >= limit) {
-              break;
-            }
-          } catch (err) {
-            console.error(`Error processing email ${uid} from ${folder}:`, (err as Error).message);
-          }
-        }
-
-        // Stop searching folders if we've reached the limit
-        if (allEmails.length >= limit) {
-          break;
-        }
-      } catch (err) {
-        console.error(`Error searching folder ${folder}:`, (err as Error).message);
-      }
+    // If no specific criteria, return all
+    if (Object.keys(query).length === 0) {
+      return { all: true };
     }
 
-    console.log(`✅ Fetched total of ${allEmails.length} emails`);
-    return allEmails;
+    return query;
   }
 
-  // Quick search that only fetches headers (much faster)
-  public async searchEmailsHeadersOnly(criteria: SearchCriteria): Promise<Array<{ email: EmailRecord; attachments: Attachment[] }>> {
-    return this.searchEmails(criteria, true);
-  }
-
-  // Sync emails for a specific date range
-  public async syncEmails(dateRange: { start: Date; end: Date }, folders?: string[]): Promise<Array<{ email: EmailRecord; attachments: Attachment[] }>> {
-    const criteria: SearchCriteria = {
-      dateRange,
-      folders: folders || ["INBOX", "[Gmail]/Sent Mail", "[Gmail]/All Mail"],
-      limit: 1000,
-    };
-
-    return this.searchEmails(criteria);
-  }
-
-  // Get recent emails
-  public async getRecentEmails(days: number = 7, folders?: string[]): Promise<Array<{ email: EmailRecord; attachments: Attachment[] }>> {
-    const start = new Date();
-    start.setDate(start.getDate() - days);
-
-    return this.syncEmails(
-      { start, end: new Date() },
-      folders
-    );
-  }
-
-  // Disconnect from IMAP
-  public disconnect(): void {
-    if (this.isConnected && this.imap) {
-      this.imap.end();
-      this.isConnected = false;
-    }
-  }
-
-  // Force reconnect
-  public async reconnect(): Promise<void> {
-    this.disconnect();
-    await this.connect();
+  private formatAddress(addresses: any): string {
+    if (!addresses || !Array.isArray(addresses)) return '';
+    return addresses
+      .map((addr) => (addr.name ? `${addr.name} <${addr.address}>` : addr.address))
+      .join(', ');
   }
 }

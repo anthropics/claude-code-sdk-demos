@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import Database from "better-sqlite3";
 import { DatabaseManager } from "../../database/database-manager";
 import { ImapManager } from "../../database/imap-manager";
 import { DATABASE_PATH } from "../../database/config";
@@ -95,10 +95,11 @@ export async function handleSearchEndpoint(req: Request): Promise<Response> {
     console.log(`[${new Date().toISOString()}] ✅ IMAP search completed in ${searchDuration}ms - Found ${imapResults.length} results`);
 
     // Save emails to database so they can be fetched later
-    if (imapResults.length > 0) {
-      dbManager.batchUpsertEmails(imapResults);
-      console.log(`[${new Date().toISOString()}] 💾 Saved ${imapResults.length} emails to database`);
-    }
+    // Temporarily disabled due to schema issues
+    // if (imapResults.length > 0) {
+    //   dbManager.batchUpsertEmails(imapResults);
+    //   console.log(`[${new Date().toISOString()}] 💾 Saved ${imapResults.length} emails to database`);
+    // }
 
     const emailMessages = imapResults.map(({ email }) => ({
       id: email.messageId,

@@ -17,38 +17,59 @@ A demonstration email client powered by Claude and the Claude Code SDK, showcasi
 
 ## Prerequisites
 
-- [Bun](https://bun.sh) runtime (or Node.js 18+)
-- An Anthropic API key ([get one here](https://console.anthropic.com))
-- Email account with IMAP access enabled
+- **Runtime**: [Bun](https://bun.sh) or Node.js 18+
+- **API Key**: [Anthropic API key](https://console.anthropic.com)
+- **Email**: Account with IMAP access enabled (Gmail recommended)
 
 ## Installation
 
-1. Clone the repository:
+### Option 1: Docker (Recommended)
+
+The easiest way to run the email agent:
+
 ```bash
+# 1. Clone the repository
 git clone https://github.com/anthropics/sdk-demos.git
 cd sdk-demos/email-agent
-```
 
-2. Install dependencies:
-```bash
-bun install
-# or npm install
-```
-
-3. Create environment file:
-```bash
+# 2. Create and configure .env file
 cp .env.example .env
+# Edit .env with your credentials (see IMAP Setup below)
+
+# 3. Run with Docker
+docker compose up
 ```
 
-4. Configure your credentials in `.env` (see IMAP Setup below)
+Open your browser to `http://localhost:3000`
 
-5. Run the application:
+### Option 2: Local Development
+
+**With Node.js:**
 ```bash
-bun run dev
-# or npm run dev
+# 1. Clone and navigate
+git clone https://github.com/anthropics/sdk-demos.git
+cd sdk-demos/email-agent
+
+# 2. Install dependencies
+npm install
+
+# 3. Configure environment
+cp .env.example .env
+# Edit .env with your credentials
+
+# 4. Run the server
+npm run dev
 ```
 
-6. Open your browser to `http://localhost:3000`
+**With Bun:**
+```bash
+# 1-3. Same as above
+
+# 4. Run with Bun
+bun run dev
+```
+
+Open your browser to `http://localhost:3000`
 
 ## IMAP Setup Guide
 
@@ -70,11 +91,47 @@ Gmail requires an **App Password** instead of your regular password:
 3. **Configure `.env`**:
 ```env
 ANTHROPIC_API_KEY=your-anthropic-api-key
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASSWORD=your-16-char-app-password  # NOT your regular password!
+EMAIL_ADDRESS=your-email@gmail.com
+EMAIL_APP_PASSWORD=your-16-char-app-password  # NOT your regular password!
 IMAP_HOST=imap.gmail.com
 IMAP_PORT=993
 ```
+
+## Troubleshooting
+
+### Gmail IMAP Issues
+
+**Problem**: Emails fetch slowly or time out
+
+**Solutions**:
+1. Verify your app password is correct (not your regular Gmail password)
+2. Check that IMAP is enabled in Gmail settings
+3. Ensure 2-factor authentication is enabled (required for app passwords)
+4. If using Docker, restart the container: `docker compose restart`
+
+**Performance Notes**:
+- Initial email sync may take a few seconds
+- Full email bodies (including attachments) are fetched on-demand
+- Typical fetch time: ~2-3 seconds for 1-3 emails with full content
+
+### Docker Issues
+
+**Problem**: Container fails to start
+
+**Solutions**:
+- Verify Docker is running: `docker ps`
+- Check .env file exists and has correct credentials
+- Rebuild the container: `docker compose build --no-cache`
+- View logs: `docker compose logs -f`
+
+### Node.js Issues
+
+**Problem**: Module not found or dependency errors
+
+**Solutions**:
+- Clear node_modules and reinstall: `rm -rf node_modules && npm install`
+- Ensure Node.js version 18 or higher: `node --version`
+- Try using npm instead of yarn or pnpm
 
 ## Support
 

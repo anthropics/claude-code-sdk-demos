@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { WebSocketHandler } from "../ccsdk/websocket-handler";
 import type { WSClient } from "../ccsdk/types";
-import { Database } from "bun:sqlite";
-import { EmailSyncService } from "../database/email-sync";
+import Database from "better-sqlite3";
+// import { EmailSyncService } from "../database/email-sync"; // Disabled: uses old node-imap
 import { DATABASE_PATH } from "../database/config";
 import { DatabaseManager } from "../database/database-manager";
 import { ImapManager } from "../database/imap-manager";
@@ -16,13 +16,14 @@ import {
   handleBatchEmailsEndpoint
 } from "./endpoints";
 
-const wsHandler = new WebSocketHandler(DATABASE_PATH);
-const db = new Database(DATABASE_PATH);
-
+// Initialize DatabaseManager FIRST to create correct schema
 const dbManager = DatabaseManager.getInstance();
 const imapManager = ImapManager.getInstance();
 
-db.run(`
+const wsHandler = new WebSocketHandler(DATABASE_PATH);
+const db = new Database(DATABASE_PATH);
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS sync_metadata (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sync_time TEXT NOT NULL,
@@ -32,7 +33,7 @@ db.run(`
   )
 `);
 
-const syncService = new EmailSyncService(DATABASE_PATH);
+// const syncService = new EmailSyncService(DATABASE_PATH); // Disabled: uses old node-imap
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

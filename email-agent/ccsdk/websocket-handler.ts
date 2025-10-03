@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import Database from "better-sqlite3";
 import { Session } from "./session";
 import type { WSClient, IncomingMessage } from "./types";
 import { DATABASE_PATH } from "../database/config";
@@ -24,12 +24,12 @@ export class WebSocketHandler {
 
     // Read initial content
     try {
-      const file = Bun.file(profilePath);
-      if (await file.exists()) {
-        this.profileContent = await file.text();
+      const fs = await import('fs/promises');
+      this.profileContent = await fs.readFile(profilePath, 'utf-8');
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        console.error('Error reading initial profile:', error);
       }
-    } catch (error) {
-      console.error('Error reading initial profile:', error);
     }
 
     // Watch for changes
@@ -43,8 +43,8 @@ export class WebSocketHandler {
 
           this.profileUpdateTimeout = setTimeout(async () => {
             try {
-              const file = Bun.file(profilePath);
-              const newContent = await file.text();
+              const fs = await import('fs/promises');
+              const newContent = await fs.readFile(profilePath, 'utf-8');
 
               if (newContent !== this.profileContent) {
                 this.profileContent = newContent;

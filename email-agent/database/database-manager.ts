@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import Database from "better-sqlite3";
 import * as path from "path";
 import { DATABASE_PATH } from "./config";
 
@@ -85,41 +85,41 @@ export class DatabaseManager {
   }
 
   private initializeDatabase(): void {
-    // Create main emails table
+    // Create main emails table (using snake_case to match queries)
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS emails (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        messageId TEXT UNIQUE NOT NULL,
-        threadId TEXT,
-        inReplyTo TEXT,
-        emailReferences TEXT,
-        dateSent DATETIME NOT NULL,
-        dateReceived DATETIME DEFAULT CURRENT_TIMESTAMP,
+        message_id TEXT UNIQUE NOT NULL,
+        thread_id TEXT,
+        in_reply_to TEXT,
+        email_references TEXT,
+        date_sent DATETIME NOT NULL,
+        date_received DATETIME DEFAULT CURRENT_TIMESTAMP,
         subject TEXT,
-        fromAddress TEXT NOT NULL,
-        fromName TEXT,
-        toAddresses TEXT,
-        ccAddresses TEXT,
-        bccAddresses TEXT,
-        replyTo TEXT,
-        bodyText TEXT,
-        bodyHtml TEXT,
+        from_address TEXT NOT NULL,
+        from_name TEXT,
+        to_addresses TEXT,
+        cc_addresses TEXT,
+        bcc_addresses TEXT,
+        reply_to TEXT,
+        body_text TEXT,
+        body_html TEXT,
         snippet TEXT,
-        isRead BOOLEAN DEFAULT 0,
-        isStarred BOOLEAN DEFAULT 0,
-        isImportant BOOLEAN DEFAULT 0,
-        isDraft BOOLEAN DEFAULT 0,
-        isSent BOOLEAN DEFAULT 0,
-        isTrash BOOLEAN DEFAULT 0,
-        isSpam BOOLEAN DEFAULT 0,
-        sizeBytes INTEGER DEFAULT 0,
-        hasAttachments BOOLEAN DEFAULT 0,
-        attachmentCount INTEGER DEFAULT 0,
+        is_read BOOLEAN DEFAULT 0,
+        is_starred BOOLEAN DEFAULT 0,
+        is_important BOOLEAN DEFAULT 0,
+        is_draft BOOLEAN DEFAULT 0,
+        is_sent BOOLEAN DEFAULT 0,
+        is_trash BOOLEAN DEFAULT 0,
+        is_spam BOOLEAN DEFAULT 0,
+        size_bytes INTEGER DEFAULT 0,
+        has_attachments BOOLEAN DEFAULT 0,
+        attachment_count INTEGER DEFAULT 0,
         folder TEXT DEFAULT 'INBOX',
         labels TEXT,
-        rawHeaders TEXT,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        raw_headers TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
