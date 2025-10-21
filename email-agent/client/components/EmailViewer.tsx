@@ -1,5 +1,6 @@
-import React from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Zap } from 'lucide-react';
+import { EmailActions } from './EmailActions';
 import { useScreenshotMode } from '../context/ScreenshotModeContext';
 import {
   getPlaceholderEmail,
@@ -28,11 +29,13 @@ interface Email {
 interface EmailViewerProps {
   email: Email | null;
   onClose: () => void;
+  sendMessage?: (message: any) => void;
+  actions?: any;
+  isGeneratingActions?: boolean;
 }
 
-export function EmailViewer({ email, onClose }: EmailViewerProps) {
+export function EmailViewer({ email, onClose, sendMessage, actions, isGeneratingActions = false }: EmailViewerProps) {
   const { isScreenshotMode } = useScreenshotMode();
-
   if (!email) {
     return (
       <div className="flex-1 flex items-center justify-center bg-gray-50 border-r border-gray-200">
@@ -53,6 +56,26 @@ export function EmailViewer({ email, onClose }: EmailViewerProps) {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const handleGenerateActions = () => {
+    if (!sendMessage || !email) return;
+
+    const message = {
+      type: 'generate_actions',
+      emailId: email.message_id,
+      emailContent: {
+        subject: email.subject,
+        from_address: email.from_address,
+        from_name: email.from_name,
+        to_address: email.to_address,
+        date_sent: email.date_sent,
+        body_text: email.body_text
+      }
+    };
+
+    sendMessage(message);
+    console.log('Generating actions for email:', email.message_id);
   };
 
   return (
@@ -106,6 +129,46 @@ export function EmailViewer({ email, onClose }: EmailViewerProps) {
           </pre>
         </div>
       </div>
+
+      {/* Draft Actions Section */}
+      {sendMessage && (
+        <div className="border-t border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium text-gray-900">Email Actions</h3>
+              {actions && email?.actions_generated_at && (
+                <span className="text-xs text-gray-500">
+                  (cached {new Date(email.actions_generated_at).toLocaleString()})
+                </span>
+              )}
+            </div>
+            <button
+              onClick={handleGenerateActions}
+              disabled={isGeneratingActions}
+              className="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Zap className="w-4 h-4 mr-2" />
+              {isGeneratingActions ? 'Generating...' : (actions ? 'Regenerate Actions' : 'Generate Actions')}
+            </button>
+          </div>
+
+          {isGeneratingActions && (
+            <div className="mt-4 text-sm text-gray-600">
+              Analyzing email and generating actions...
+            </div>
+          )}
+
+          {actions?.error && (
+            <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-800">Error: {actions.error}</p>
+            </div>
+          )}
+
+          <div className="mt-4">
+            <EmailActions actions={actions} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

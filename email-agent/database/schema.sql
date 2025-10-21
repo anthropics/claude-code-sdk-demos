@@ -188,6 +188,21 @@ BEGIN
     DELETE FROM emails_fts WHERE message_id = OLD.message_id;
 END;
 
+-- Email actions table for caching generated AI actions
+CREATE TABLE IF NOT EXISTS email_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email_message_id TEXT NOT NULL,
+    actions_json TEXT NOT NULL,  -- JSON string of the actions data
+    generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    is_valid BOOLEAN DEFAULT 1,  -- Flag to invalidate old actions if needed
+
+    FOREIGN KEY (email_message_id) REFERENCES emails(message_id) ON DELETE CASCADE
+);
+
+-- Index for fast lookups by email message ID
+CREATE INDEX idx_email_actions_message_id ON email_actions(email_message_id);
+CREATE INDEX idx_email_actions_generated_at ON email_actions(generated_at DESC);
+
 -- Views for common queries
 CREATE VIEW IF NOT EXISTS email_summary AS
 SELECT 
