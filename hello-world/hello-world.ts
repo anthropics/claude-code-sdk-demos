@@ -8,7 +8,7 @@ async function main() {
     options: {
       maxTurns: 100,
       cwd: path.join(process.cwd(), 'agent'),
-      model: "opus",
+      // model: "opus",
       executable: "node", // Use the current node binary path
       allowedTools: [
         "Task", "Bash", "Glob", "Grep", "LS", "ExitPlanMode", "Read", "Edit", "MultiEdit", "Write", "NotebookEdit",

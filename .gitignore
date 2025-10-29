@@ -3,3 +3,4 @@
 .DS_Store
 .github
 .vscode
+node_modules
