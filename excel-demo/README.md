@@ -31,7 +31,7 @@ The `agent/` folder contains Python examples including:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/anthropics/sdk-demos.git
+git clone https://github.com/anthropics/claude-agent-sdk-demos.git
 cd sdk-demos/excel-demo
 ```
 
@@ -109,7 +109,7 @@ excel-demo/
 
 This is a demo application provided as-is. For issues related to:
 - **Claude Agent SDK**: [SDK Documentation](https://docs.anthropic.com/claude-code)
-- **Demo Issues**: [GitHub Issues](https://github.com/anthropics/sdk-demos/issues)
+- **Demo Issues**: [GitHub Issues](https://github.com/anthropics/claude-agent-sdk-demos/issues)
 - **API Questions**: [Anthropic Support](https://support.anthropic.com)
 
 ## License
