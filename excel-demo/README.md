@@ -101,7 +101,7 @@ excel-demo/
 
 ## Resources
 
-- [Claude Agent SDK Documentation](https://docs.anthropic.com/en/docs/claude-code/sdk/sdk-overview)
+- [Claude Agent SDK Documentation](https://docs.claude.com/en/api/agent-sdk/overview)
 - [Electron Documentation](https://www.electronjs.org/docs/latest/)
 - [openpyxl Documentation](https://openpyxl.readthedocs.io/) (Python library used)
 
