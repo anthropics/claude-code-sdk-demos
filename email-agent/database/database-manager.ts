@@ -1,88 +1,88 @@
-import { Database } from "bun:sqlite";
-import * as path from "path";
-import { DATABASE_PATH } from "./config";
+import { Database } from 'bun:sqlite'
+import * as path from 'path'
+import { DATABASE_PATH } from './config'
 
 export interface EmailRecord {
-  id?: number;
-  messageId: string;
-  imapUid?: number;
-  threadId?: string;
-  inReplyTo?: string;
-  emailReferences?: string;
-  dateSent: Date | string;
-  dateReceived?: Date | string;
-  subject?: string;
-  fromAddress: string;
-  fromName?: string;
-  toAddresses?: string;
-  ccAddresses?: string;
-  bccAddresses?: string;
-  replyTo?: string;
-  bodyText?: string;
-  bodyHtml?: string;
-  snippet?: string;
-  isRead: boolean;
-  isStarred: boolean;
-  isImportant: boolean;
-  isDraft: boolean;
-  isSent: boolean;
-  isTrash: boolean;
-  isSpam: boolean;
-  sizeBytes: number;
-  hasAttachments: boolean;
-  attachmentCount: number;
-  folder: string;
-  labels?: string[];
-  rawHeaders?: string;
+  id?: number
+  messageId: string
+  imapUid?: number
+  threadId?: string
+  inReplyTo?: string
+  emailReferences?: string
+  dateSent: Date | string
+  dateReceived?: Date | string
+  subject?: string
+  fromAddress: string
+  fromName?: string
+  toAddresses?: string
+  ccAddresses?: string
+  bccAddresses?: string
+  replyTo?: string
+  bodyText?: string
+  bodyHtml?: string
+  snippet?: string
+  isRead: boolean
+  isStarred: boolean
+  isImportant: boolean
+  isDraft: boolean
+  isSent: boolean
+  isTrash: boolean
+  isSpam: boolean
+  sizeBytes: number
+  hasAttachments: boolean
+  attachmentCount: number
+  folder: string
+  labels?: string[]
+  rawHeaders?: string
 }
 
 export interface Attachment {
-  emailId?: number;
-  filename: string;
-  contentType?: string;
-  sizeBytes?: number;
-  contentId?: string;
-  isInline?: boolean;
+  emailId?: number
+  filename: string
+  contentType?: string
+  sizeBytes?: number
+  contentId?: string
+  isInline?: boolean
 }
 
 export interface SearchCriteria {
-  query?: string;
-  from?: string | string[] | 'me';  // 'me' will be replaced with the user's email address
-  to?: string | string[];
-  subject?: string;
-  dateRange?: { start: Date; end: Date };
-  hasAttachments?: boolean;
-  isUnread?: boolean;
-  isStarred?: boolean;
-  folder?: string;
-  folders?: string[];
-  labels?: string[];
-  threadId?: string;
-  limit?: number;
-  offset?: number;
-  minSize?: number;
-  maxSize?: number;
-  gmailQuery?: string;  // Gmail-specific native search syntax using X-GM-RAW
+  query?: string
+  from?: string | string[] | 'me' // 'me' will be replaced with the user's email address
+  to?: string | string[]
+  subject?: string
+  dateRange?: { start: Date; end: Date }
+  hasAttachments?: boolean
+  isUnread?: boolean
+  isStarred?: boolean
+  folder?: string
+  folders?: string[]
+  labels?: string[]
+  threadId?: string
+  limit?: number
+  offset?: number
+  minSize?: number
+  maxSize?: number
+  gmailQuery?: string // Gmail-specific native search syntax using X-GM-RAW
 }
 
 export class DatabaseManager {
-  private static instance: DatabaseManager;
-  private db: Database;
-  private dbPath: string;
+  private static instance: DatabaseManager
+  private db: Database
+  private dbPath: string
 
   private constructor(dbPath: string = DATABASE_PATH) {
-    this.dbPath = dbPath;
-    this.db = new Database(dbPath);
-    this.db.exec("PRAGMA journal_mode = WAL");
-    this.db.exec("PRAGMA foreign_keys = ON");
-    this.initializeDatabase();
+    this.dbPath = dbPath
+    this.db = new Database(dbPath)
+    this.db.exec('PRAGMA journal_mode = WAL')
+    this.db.exec('PRAGMA foreign_keys = ON')
+    this.initializeDatabase()
   }
 
   public static getInstance(dbPath?: string): DatabaseManager {
     if (!DatabaseManager.instance) {
-      DatabaseManager.instance = new DatabaseManager(dbPath);
+      DatabaseManager.instance = new DatabaseManager(dbPath)
     }
-    return DatabaseManager.instance;
+    return DatabaseManager.instance
   }
 
   private initializeDatabase(): void {
@@ -90,39 +90,64 @@ export class DatabaseManager {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS emails (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        messageId TEXT UNIQUE NOT NULL,
-        threadId TEXT,
-        inReplyTo TEXT,
-        emailReferences TEXT,
-        dateSent DATETIME NOT NULL,
-        dateReceived DATETIME DEFAULT CURRENT_TIMESTAMP,
+        message_id TEXT UNIQUE NOT NULL,
+        imap_uid INTEGER,
+        thread_id TEXT,
+        in_reply_to TEXT,
+        email_references TEXT,
+        date_sent DATETIME NOT NULL,
+        date_received DATETIME DEFAULT CURRENT_TIMESTAMP,
         subject TEXT,
-        fromAddress TEXT NOT NULL,
-        fromName TEXT,
-        toAddresses TEXT,
-        ccAddresses TEXT,
-        bccAddresses TEXT,
-        replyTo TEXT,
-        bodyText TEXT,
-        bodyHtml TEXT,
+        from_address TEXT NOT NULL,
+        from_name TEXT,
+        to_addresses TEXT,
+        cc_addresses TEXT,
+        bcc_addresses TEXT,
+        reply_to TEXT,
+        body_text TEXT,
+        body_html TEXT,
         snippet TEXT,
-        isRead BOOLEAN DEFAULT 0,
-        isStarred BOOLEAN DEFAULT 0,
-        isImportant BOOLEAN DEFAULT 0,
-        isDraft BOOLEAN DEFAULT 0,
-        isSent BOOLEAN DEFAULT 0,
-        isTrash BOOLEAN DEFAULT 0,
-        isSpam BOOLEAN DEFAULT 0,
-        sizeBytes INTEGER DEFAULT 0,
-        hasAttachments BOOLEAN DEFAULT 0,
-        attachmentCount INTEGER DEFAULT 0,
+        is_read BOOLEAN DEFAULT 0,
+        is_starred BOOLEAN DEFAULT 0,
+        is_important BOOLEAN DEFAULT 0,
+        is_draft BOOLEAN DEFAULT 0,
+        is_sent BOOLEAN DEFAULT 0,
+        is_trash BOOLEAN DEFAULT 0,
+        is_spam BOOLEAN DEFAULT 0,
+        size_bytes INTEGER DEFAULT 0,
+        has_attachments BOOLEAN DEFAULT 0,
+        attachment_count INTEGER DEFAULT 0,
         folder TEXT DEFAULT 'INBOX',
         labels TEXT,
-        rawHeaders TEXT,
-        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        raw_headers TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
-    `);
+    `)
+
+    const emailColumns = this.db
+      .prepare('PRAGMA table_info(emails)')
+      .all() as Array<{ name: string }>
+
+    const ensureColumn = (column: string, sql: string) => {
+      if (!emailColumns.some((info) => info.name === column)) {
+        this.db.exec(sql)
+      }
+    }
+
+    ensureColumn('imap_uid', 'ALTER TABLE emails ADD COLUMN imap_uid INTEGER')
+    ensureColumn(
+      'to_addresses',
+      'ALTER TABLE emails ADD COLUMN to_addresses TEXT'
+    )
+    ensureColumn(
+      'cc_addresses',
+      'ALTER TABLE emails ADD COLUMN cc_addresses TEXT'
+    )
+    ensureColumn(
+      'bcc_addresses',
+      'ALTER TABLE emails ADD COLUMN bcc_addresses TEXT'
+    )
 
     // Create attachments table
     this.db.exec(`
@@ -136,38 +161,38 @@ export class DatabaseManager {
         is_inline BOOLEAN DEFAULT 0,
         FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE
       )
-    `);
+    `)
 
     // Create FTS5 table for full-text search
     this.db.exec(`
       CREATE VIRTUAL TABLE IF NOT EXISTS emails_fts USING fts5(
-        messageId UNINDEXED,
+        message_id UNINDEXED,
         subject,
-        fromAddress,
-        fromName,
-        bodyText,
-        toAddresses,
-        ccAddresses,
+        from_address,
+        from_name,
+        body_text,
+        to_addresses,
+        cc_addresses,
         attachment_names,
         tokenize = 'porter unicode61'
       )
-    `);
+    `)
 
     // Create indexes
     const indexes = [
-      "CREATE INDEX IF NOT EXISTS idx_emails_date_sent ON emails(date_sent DESC)",
-      "CREATE INDEX IF NOT EXISTS idx_emails_from_address ON emails(from_address)",
-      "CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails(thread_id)",
-      "CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id)",
-      "CREATE INDEX IF NOT EXISTS idx_emails_is_read ON emails(is_read)",
-      "CREATE INDEX IF NOT EXISTS idx_emails_is_starred ON emails(is_starred)",
-      "CREATE INDEX IF NOT EXISTS idx_emails_folder ON emails(folder)",
-      "CREATE INDEX IF NOT EXISTS idx_emails_has_attachments ON emails(has_attachments)",
-      "CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id)"
-    ];
+      'CREATE INDEX IF NOT EXISTS idx_emails_date_sent ON emails(date_sent DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_emails_from_address ON emails(from_address)',
+      'CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails(thread_id)',
+      'CREATE INDEX IF NOT EXISTS idx_emails_message_id ON emails(message_id)',
+      'CREATE INDEX IF NOT EXISTS idx_emails_is_read ON emails(is_read)',
+      'CREATE INDEX IF NOT EXISTS idx_emails_is_starred ON emails(is_starred)',
+      'CREATE INDEX IF NOT EXISTS idx_emails_folder ON emails(folder)',
+      'CREATE INDEX IF NOT EXISTS idx_emails_has_attachments ON emails(has_attachments)',
+      'CREATE INDEX IF NOT EXISTS idx_attachments_email_id ON attachments(email_id)',
+    ]
 
     for (const index of indexes) {
-      this.db.exec(index);
+      this.db.exec(index)
     }
 
     // Create triggers for FTS
@@ -176,15 +201,15 @@ export class DatabaseManager {
       AFTER INSERT ON emails
       BEGIN
         INSERT INTO emails_fts(
-          messageId, subject, fromAddress, fromName, bodyText,
-          toAddresses, ccAddresses
+          message_id, subject, from_address, from_name, body_text,
+          to_addresses, cc_addresses
         )
         VALUES (
-          NEW.messageId, NEW.subject, NEW.fromAddress, NEW.fromName,
-          NEW.bodyText, NEW.toAddresses, NEW.ccAddresses
+          NEW.message_id, NEW.subject, NEW.from_address, NEW.from_name,
+          NEW.body_text, NEW.to_addresses, NEW.cc_addresses
         );
       END
-    `);
+    `)
 
     this.db.exec(`
       CREATE TRIGGER IF NOT EXISTS emails_fts_update
@@ -199,7 +224,7 @@ export class DatabaseManager {
             cc_addresses = NEW.cc_addresses
         WHERE message_id = NEW.message_id;
       END
-    `);
+    `)
 
     this.db.exec(`
       CREATE TRIGGER IF NOT EXISTS emails_fts_delete
@@ -207,11 +232,14 @@ export class DatabaseManager {
       BEGIN
         DELETE FROM emails_fts WHERE message_id = OLD.message_id;
       END
-    `);
+    `)
   }
 
   // Upsert email with attachments
-  public upsertEmail(email: EmailRecord, attachments: Attachment[] = []): number {
+  public upsertEmail(
+    email: EmailRecord,
+    attachments: Attachment[] = []
+  ): number {
     const upsertEmail = this.db.prepare(`
       INSERT INTO emails (
         message_id, thread_id, in_reply_to, email_references,
@@ -261,7 +289,7 @@ export class DatabaseManager {
         raw_headers = excluded.raw_headers,
         updated_at = CURRENT_TIMESTAMP
       RETURNING id
-    `);
+    `)
 
     const insertAttachment = this.db.prepare(`
       INSERT INTO attachments (
@@ -269,11 +297,11 @@ export class DatabaseManager {
       ) VALUES (
         $emailId, $filename, $contentType, $sizeBytes, $contentId, $isInline
       )
-    `);
+    `)
 
     const deleteAttachments = this.db.prepare(`
       DELETE FROM attachments WHERE email_id = $emailId
-    `);
+    `)
 
     // Use transaction for consistency
     const upsertTransaction = this.db.transaction(() => {
@@ -282,9 +310,14 @@ export class DatabaseManager {
         $threadId: email.threadId || null,
         $inReplyTo: email.inReplyTo || null,
         $emailReferences: email.emailReferences || null,
-        $dateSent: typeof email.dateSent === 'string' ? email.dateSent : email.dateSent.toISOString(),
+        $dateSent:
+          typeof email.dateSent === 'string'
+            ? email.dateSent
+            : email.dateSent.toISOString(),
         $dateReceived: email.dateReceived
-          ? (typeof email.dateReceived === 'string' ? email.dateReceived : email.dateReceived.toISOString())
+          ? typeof email.dateReceived === 'string'
+            ? email.dateReceived
+            : email.dateReceived.toISOString()
           : new Date().toISOString(),
         $subject: email.subject || null,
         $fromAddress: email.fromAddress,
@@ -306,16 +339,18 @@ export class DatabaseManager {
         $sizeBytes: email.sizeBytes || 0,
         $hasAttachments: attachments.length > 0 ? 1 : 0,
         $attachmentCount: attachments.length,
-        $folder: email.folder || "INBOX",
-        $labels: Array.isArray(email.labels) ? JSON.stringify(email.labels) : email.labels || null,
+        $folder: email.folder || 'INBOX',
+        $labels: Array.isArray(email.labels)
+          ? JSON.stringify(email.labels)
+          : email.labels || null,
         $rawHeaders: email.rawHeaders || null,
-      }) as any;
+      }) as any
 
-      const emailId = result.id;
+      const emailId = result.id
 
       // Delete existing attachments and insert new ones
       if (attachments.length > 0) {
-        deleteAttachments.run({ $emailId: emailId });
+        deleteAttachments.run({ $emailId: emailId })
 
         for (const attachment of attachments) {
           insertAttachment.run({
@@ -325,31 +360,35 @@ export class DatabaseManager {
             $sizeBytes: attachment.sizeBytes || 0,
             $contentId: attachment.contentId || null,
             $isInline: attachment.isInline ? 1 : 0,
-          });
+          })
         }
 
         // Update FTS with attachment filenames
-        const attachmentNames = attachments.map(a => a.filename).join(" ");
-        this.db.prepare(`
+        const attachmentNames = attachments.map((a) => a.filename).join(' ')
+        this.db
+          .prepare(
+            `
           UPDATE emails_fts
           SET attachment_names = $names
           WHERE message_id = $messageId
-        `).run({
-          $names: attachmentNames,
-          $messageId: email.messageId,
-        });
+        `
+          )
+          .run({
+            $names: attachmentNames,
+            $messageId: email.messageId,
+          })
       }
 
-      return emailId;
-    });
+      return emailId
+    })
 
-    return upsertTransaction() as number;
+    return upsertTransaction() as number
   }
 
   // Search emails
   public searchEmails(criteria: SearchCriteria): EmailRecord[] {
-    let whereClauses: string[] = [];
-    let params: any = {};
+    let whereClauses: string[] = []
+    let params: any = {}
 
     // Full-text search
     if (criteria.query) {
@@ -359,204 +398,218 @@ export class DatabaseManager {
           JOIN emails_fts fts ON e2.message_id = fts.message_id
           WHERE emails_fts MATCH $query
         )
-      `);
-      params.$query = criteria.query;
+      `)
+      params.$query = criteria.query
     }
 
     // From filter (supports array)
     if (criteria.from) {
-      const fromAddresses = Array.isArray(criteria.from) ? criteria.from : [criteria.from];
+      const fromAddresses = Array.isArray(criteria.from)
+        ? criteria.from
+        : [criteria.from]
       if (fromAddresses.length === 1) {
-        whereClauses.push("e.from_address LIKE $from");
-        params.$from = `%${fromAddresses[0]}%`;
+        whereClauses.push('e.from_address LIKE $from')
+        params.$from = `%${fromAddresses[0]}%`
       } else {
-        const fromClauses = fromAddresses.map((_, i) => `e.from_address LIKE $from${i}`);
-        whereClauses.push(`(${fromClauses.join(' OR ')})`);
+        const fromClauses = fromAddresses.map(
+          (_, i) => `e.from_address LIKE $from${i}`
+        )
+        whereClauses.push(`(${fromClauses.join(' OR ')})`)
         fromAddresses.forEach((addr, i) => {
-          params[`$from${i}`] = `%${addr}%`;
-        });
+          params[`$from${i}`] = `%${addr}%`
+        })
       }
     }
 
     // To filter (supports array)
     if (criteria.to) {
-      const toAddresses = Array.isArray(criteria.to) ? criteria.to : [criteria.to];
+      const toAddresses = Array.isArray(criteria.to)
+        ? criteria.to
+        : [criteria.to]
       if (toAddresses.length === 1) {
-        whereClauses.push("e.to_addresses LIKE $to");
-        params.$to = `%${toAddresses[0]}%`;
+        whereClauses.push('e.to_addresses LIKE $to')
+        params.$to = `%${toAddresses[0]}%`
       } else {
-        const toClauses = toAddresses.map((_, i) => `e.to_addresses LIKE $to${i}`);
-        whereClauses.push(`(${toClauses.join(' OR ')})`);
+        const toClauses = toAddresses.map(
+          (_, i) => `e.to_addresses LIKE $to${i}`
+        )
+        whereClauses.push(`(${toClauses.join(' OR ')})`)
         toAddresses.forEach((addr, i) => {
-          params[`$to${i}`] = `%${addr}%`;
-        });
+          params[`$to${i}`] = `%${addr}%`
+        })
       }
     }
 
     // Subject filter
     if (criteria.subject) {
-      whereClauses.push("e.subject LIKE $subject");
-      params.$subject = `%${criteria.subject}%`;
+      whereClauses.push('e.subject LIKE $subject')
+      params.$subject = `%${criteria.subject}%`
     }
 
     // Date range filter
     if (criteria.dateRange) {
       if (criteria.dateRange.start) {
-        whereClauses.push("e.date_sent >= $dateFrom");
-        params.$dateFrom = criteria.dateRange.start.toISOString();
+        whereClauses.push('e.date_sent >= $dateFrom')
+        params.$dateFrom = criteria.dateRange.start.toISOString()
       }
       if (criteria.dateRange.end) {
-        whereClauses.push("e.date_sent <= $dateTo");
-        params.$dateTo = criteria.dateRange.end.toISOString();
+        whereClauses.push('e.date_sent <= $dateTo')
+        params.$dateTo = criteria.dateRange.end.toISOString()
       }
     }
 
     // Boolean filters
     if (criteria.hasAttachments !== undefined) {
-      whereClauses.push("e.has_attachments = $hasAttachments");
-      params.$hasAttachments = criteria.hasAttachments ? 1 : 0;
+      whereClauses.push('e.has_attachments = $hasAttachments')
+      params.$hasAttachments = criteria.hasAttachments ? 1 : 0
     }
 
     if (criteria.isUnread !== undefined) {
-      whereClauses.push("e.is_read = $isRead");
-      params.$isRead = criteria.isUnread ? 0 : 1;
+      whereClauses.push('e.is_read = $isRead')
+      params.$isRead = criteria.isUnread ? 0 : 1
     }
 
     if (criteria.isStarred !== undefined) {
-      whereClauses.push("e.is_starred = $isStarred");
-      params.$isStarred = criteria.isStarred ? 1 : 0;
+      whereClauses.push('e.is_starred = $isStarred')
+      params.$isStarred = criteria.isStarred ? 1 : 0
     }
 
     // Folder filter (supports array via folders or single via folder)
     if (criteria.folders && criteria.folders.length > 0) {
-      const folderPlaceholders = criteria.folders.map((_, i) => `$folder${i}`);
-      whereClauses.push(`e.folder IN (${folderPlaceholders.join(', ')})`);
+      const folderPlaceholders = criteria.folders.map((_, i) => `$folder${i}`)
+      whereClauses.push(`e.folder IN (${folderPlaceholders.join(', ')})`)
       criteria.folders.forEach((folder, i) => {
-        params[`$folder${i}`] = folder;
-      });
+        params[`$folder${i}`] = folder
+      })
     } else if (criteria.folder) {
-      whereClauses.push("e.folder = $folder");
-      params.$folder = criteria.folder;
+      whereClauses.push('e.folder = $folder')
+      params.$folder = criteria.folder
     }
 
     // Thread filter
     if (criteria.threadId) {
-      whereClauses.push("e.threadId = $threadId");
-      params.$threadId = criteria.threadId;
+      whereClauses.push('e.threadId = $threadId')
+      params.$threadId = criteria.threadId
     }
 
     // Size filters
     if (criteria.minSize) {
-      whereClauses.push("e.sizeBytes >= $minSize");
-      params.$minSize = criteria.minSize;
+      whereClauses.push('e.sizeBytes >= $minSize')
+      params.$minSize = criteria.minSize
     }
 
     if (criteria.maxSize) {
-      whereClauses.push("e.sizeBytes <= $maxSize");
-      params.$maxSize = criteria.maxSize;
+      whereClauses.push('e.sizeBytes <= $maxSize')
+      params.$maxSize = criteria.maxSize
     }
 
-    const whereClause = whereClauses.length > 0
-      ? "WHERE " + whereClauses.join(" AND ")
-      : "";
+    const whereClause =
+      whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : ''
 
-    const limit = criteria.limit || 30;
-    const offset = criteria.offset || 0;
+    const limit = criteria.limit || 30
+    const offset = criteria.offset || 0
 
     const sql = `
       SELECT e.* FROM emails e
       ${whereClause}
       ORDER BY e.date_sent DESC
       LIMIT ${limit} OFFSET ${offset}
-    `;
+    `
 
-    const query = this.db.prepare(sql);
-    const results = query.all(params);
+    const query = this.db.prepare(sql)
+    const results = query.all(params)
 
-    return results.map(row => this.mapRowToEmailRecord(row));
+    return results.map((row) => this.mapRowToEmailRecord(row))
   }
 
   // Get recent emails
-  public getRecentEmails(limit: number = 50, includeRead: boolean = true): EmailRecord[] {
+  public getRecentEmails(
+    limit: number = 50,
+    includeRead: boolean = true
+  ): EmailRecord[] {
     let sql = `
       SELECT * FROM emails
       WHERE folder IN ('INBOX', 'Inbox', '[Gmail]/All Mail')
-    `;
+    `
 
     if (!includeRead) {
-      sql += ' AND is_read = 0';
+      sql += ' AND is_read = 0'
     }
 
-    sql += ` ORDER BY date_sent DESC LIMIT $limit`;
+    sql += ` ORDER BY date_sent DESC LIMIT $limit`
 
-    const query = this.db.prepare(sql);
-    const results = query.all({ $limit: limit });
+    const query = this.db.prepare(sql)
+    const results = query.all({ $limit: limit })
 
-    return results.map(row => this.mapRowToEmailRecord(row));
+    return results.map((row) => this.mapRowToEmailRecord(row))
   }
 
   // Get email by message ID
   public getEmailByMessageId(messageId: string): EmailRecord | null {
     const query = this.db.prepare(`
       SELECT * FROM emails WHERE message_id = $messageId
-    `);
-    const result = query.get({ $messageId: messageId });
+    `)
+    const result = query.get({ $messageId: messageId })
 
-    return result ? this.mapRowToEmailRecord(result) : null;
+    return result ? this.mapRowToEmailRecord(result) : null
   }
 
   // Get multiple emails by IDs
   public getEmailsByIds(ids: number[]): EmailRecord[] {
-    if (!ids.length) return [];
+    if (!ids.length) return []
 
-    const placeholders = ids.map(() => '?').join(',');
+    const placeholders = ids.map(() => '?').join(',')
     const query = this.db.prepare(`
       SELECT * FROM emails
       WHERE id IN (${placeholders})
       ORDER BY date_sent DESC
-    `);
-    const results = query.all(...ids);
+    `)
+    const results = query.all(...ids)
 
-    return results.map(row => this.mapRowToEmailRecord(row));
+    return results.map((row) => this.mapRowToEmailRecord(row))
   }
 
   // Get multiple emails by message IDs
   public getEmailsByMessageIds(messageIds: string[]): EmailRecord[] {
-    if (!messageIds.length) return [];
+    if (!messageIds.length) return []
 
-    const placeholders = messageIds.map(() => '?').join(',');
+    const placeholders = messageIds.map(() => '?').join(',')
     const query = this.db.prepare(`
       SELECT * FROM emails
       WHERE message_id IN (${placeholders})
       ORDER BY date_sent DESC
-    `);
-    const results = query.all(...messageIds);
+    `)
+    const results = query.all(...messageIds)
 
-    return results.map(row => this.mapRowToEmailRecord(row));
+    return results.map((row) => this.mapRowToEmailRecord(row))
   }
 
   // Get attachments for an email
   public getAttachments(emailId: number): Attachment[] {
     const query = this.db.prepare(`
       SELECT * FROM attachments WHERE email_id = $emailId
-    `);
-    return query.all({ $emailId: emailId }) as Attachment[];
+    `)
+    return query.all({ $emailId: emailId }) as Attachment[]
   }
 
   // Batch upsert emails
-  public batchUpsertEmails(emails: Array<{ email: EmailRecord; attachments?: Attachment[] }>): void {
+  public batchUpsertEmails(
+    emails: Array<{ email: EmailRecord; attachments?: Attachment[] }>
+  ): void {
     const batchTransaction = this.db.transaction(() => {
       for (const { email, attachments } of emails) {
-        this.upsertEmail(email, attachments || []);
+        this.upsertEmail(email, attachments || [])
       }
-    });
+    })
 
-    batchTransaction();
+    batchTransaction()
   }
 
   // Get statistics
   public getStatistics(): any {
-    return this.db.prepare(`
+    return this.db
+      .prepare(
+        `
       SELECT
         COUNT(*) as totalEmails,
         SUM(CASE WHEN is_read = 0 THEN 1 ELSE 0 END) as unreadCount,
@@ -568,7 +621,9 @@ export class DatabaseManager {
         MIN(date_sent) as oldestEmail,
         MAX(date_sent) as newestEmail
       FROM emails
-    `).get();
+    `
+      )
+      .get()
   }
 
   // Helper method to map database row to EmailRecord
@@ -604,68 +659,71 @@ export class DatabaseManager {
       folder: row.folder,
       labels: row.labels ? JSON.parse(row.labels) : [],
       rawHeaders: row.raw_headers,
-    };
+    }
   }
 
   /**
    * Update email flags (for listener actions)
    * Updates only the specified fields while preserving others
    */
-  public updateEmailFlags(messageId: string, updates: {
-    isRead?: boolean;
-    isStarred?: boolean;
-    isImportant?: boolean;
-    labels?: string[];
-    folder?: string;
-  }): void {
-    const setClauses: string[] = [];
-    const params: any = { $messageId: messageId };
+  public updateEmailFlags(
+    messageId: string,
+    updates: {
+      isRead?: boolean
+      isStarred?: boolean
+      isImportant?: boolean
+      labels?: string[]
+      folder?: string
+    }
+  ): void {
+    const setClauses: string[] = []
+    const params: any = { $messageId: messageId }
 
     if (updates.isRead !== undefined) {
-      setClauses.push('is_read = $isRead');
-      params.$isRead = updates.isRead ? 1 : 0;
+      setClauses.push('is_read = $isRead')
+      params.$isRead = updates.isRead ? 1 : 0
     }
 
     if (updates.isStarred !== undefined) {
-      setClauses.push('is_starred = $isStarred');
-      params.$isStarred = updates.isStarred ? 1 : 0;
+      setClauses.push('is_starred = $isStarred')
+      params.$isStarred = updates.isStarred ? 1 : 0
     }
 
     if (updates.isImportant !== undefined) {
-      setClauses.push('is_important = $isImportant');
-      params.$isImportant = updates.isImportant ? 1 : 0;
+      setClauses.push('is_important = $isImportant')
+      params.$isImportant = updates.isImportant ? 1 : 0
     }
 
     if (updates.labels !== undefined) {
-      setClauses.push('labels = $labels');
-      params.$labels = JSON.stringify(updates.labels);
+      setClauses.push('labels = $labels')
+      params.$labels = JSON.stringify(updates.labels)
     }
 
     if (updates.folder !== undefined) {
-      setClauses.push('folder = $folder');
-      params.$folder = updates.folder;
+      setClauses.push('folder = $folder')
+      params.$folder = updates.folder
     }
 
     // Always update the updated_at timestamp
-    setClauses.push('updated_at = CURRENT_TIMESTAMP');
+    setClauses.push('updated_at = CURRENT_TIMESTAMP')
 
     if (setClauses.length === 1) {
       // Only updated_at would be set, so nothing to update
-      return;
+      return
     }
 
     const sql = `
       UPDATE emails
       SET ${setClauses.join(', ')}
       WHERE message_id = $messageId
-    `;
+    `
 
-    const query = this.db.prepare(sql);
-    query.run(params);
+    const query = this.db.prepare(sql)
+    query.run(params)
   }
 
   // Close database connection
   public close(): void {
-    this.db.close();
+    this.db.close()
   }
 }
